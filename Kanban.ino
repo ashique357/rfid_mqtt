@@ -1,40 +1,61 @@
-#include <MFRC522.h> // includes the RFID RC522 library 
-#define MAXRFIDTAGS 100 // defines the max. no. of tags allowed
-//#define SS_PIN 10 // defines that SS pin or SDA pin is connected to pin D10
-//#define RST_PIN 9 // reset pin is connected to D9
+#include <SPI.h>
+#include <MFRC522.h>
 
-#include<PubSubClient.h> // A client library that provides support for MQTT
+#define RST_PIN         D1           // Configurable, see typical pin layout above
+#define SS_PIN          D2          // Configurable, see typical pin layout above
 
-#include <ESP8266WiFi.h>
-#include <WiFiClient.h>
-#include <HttpClient.h>  // library for posting HTTP requests
-#include <SPI.h> //includes the Serial Peripheral Interface library
+MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance
 
-
-char ssid[] ="FKL_CUTTING"; // write your WiFi name in between double quotes
-char password[] ="%%CUT$$DG@@TING"; // write your WiFi Password in between double quotes
-WiFiClient client;
-
-void setup()
-{
-  Serial.begin(9600);
-  Serial.println();
-
-  Serial.printf("Connecting to %s ", ssid);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
+//*****************************************************************************************//
+void setup() {
+  Serial.begin(9600);                                           // Initialize serial communications with the PC
+  SPI.begin();                                                  // Init SPI bus
+  mfrc522.PCD_Init();                                              // Init MFRC522 card
+}
+/**
+ * Helper routine to dump a byte array as hex values to Serial.
+ */
+void PrintHex(byte *buffer, byte bufferSize) {
+  for (byte i = 0; i < bufferSize; i++) {
+    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+    Serial.print(buffer[i], HEX);
   }
-  Serial.println(" connected");
 }
 
-void loop(){
-     if(WiFi.status != WL_CONNECTED){
-      Serial.println("Yes");
-      }
-      else{
-        Serial.println("No");
-        }
+
+void loop() {
+
+  // Look for new cards
+  if ( !mfrc522.PICC_IsNewCardPresent()) {
+    return;
   }
+  if ( !mfrc522.PICC_ReadCardSerial()) {
+    return;
+  }
+  
+ 
+  Serial.print("NewCard");
+  PrintHex(mfrc522.uid.uidByte, mfrc522.uid.size);
+  Serial.println("");
+
+  // Check if Card was removed
+  bool cardRemoved = false;
+  int counter = 0;
+  bool current, previous;
+  previous = !mfrc522.PICC_IsNewCardPresent();
+    
+  while(!cardRemoved){
+    current =!mfrc522.PICC_IsNewCardPresent();
+
+    if (current && previous) counter++;
+
+    previous = current;
+    cardRemoved = (counter>2);      
+    delay(50);
+  }
+  
+  Serial.println("Card was removed");
+  delay(500); //change value if you want to read cards faster
+//  mfrc522.PICC_HaltA();
+//  mfrc522.PCD_StopCrypto1();
+}
